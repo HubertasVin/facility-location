@@ -1,0 +1,5 @@
+results/
+final_scores.csv
+training_curves.csv
+rl
+qtable.dat
