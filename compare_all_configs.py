@@ -126,6 +126,53 @@ def plot_parameter_comparison(files, param_name, param_values, fixed_params):
     fig3.savefig(filename3, dpi=300, bbox_inches="tight")
     print(f"Saved: {filename3}")
     plt.close(fig3)
+    
+# --- Total Reward Q-value vs Standard Q-learning Comparison ---
+
+def plot_totalQ_comparison():
+    # Look for both files
+    file_std = "training_a0.4_g0.4_e0.3_totalQoff.csv"
+    file_total = "training_a0.4_g0.4_e0.3_totalQon.csv"
+    if not (os.path.exists(file_std) and os.path.exists(file_total)):
+        print("Total Q-value comparison files not found, skipping totalQ comparison plot.")
+        return
+
+    df_std = pd.read_csv(file_std)
+    df_total = pd.read_csv(file_total)
+
+    # Group by episode and compute IQM and IQR for both
+    def get_iqm_stats(df):
+        grouped = df.groupby("episode")["utility"].agg(
+            [
+                ("mean", "mean"),
+                ("std", "std"),
+                ("q25", lambda x: x.quantile(0.25)),
+                ("q75", lambda x: x.quantile(0.75)),
+                ("iqm", lambda s: s[(s >= s.quantile(0.25)) & (s <= s.quantile(0.75))].mean()),
+            ]
+        )
+        return grouped
+
+    grouped_std = get_iqm_stats(df_std)
+    grouped_total = get_iqm_stats(df_total)
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(grouped_std.index, grouped_std["iqm"], label="Standard Q-learning", color="#1f77b4", linewidth=2.5)
+    plt.fill_between(grouped_std.index, grouped_std["q25"], grouped_std["q75"], alpha=0.1, color="#1f77b4")
+
+    plt.plot(grouped_total.index, grouped_total["iqm"], label="Total Reward Q-value", color="#e63946", linewidth=2.5)
+    plt.fill_between(grouped_total.index, grouped_total["q25"], grouped_total["q75"], alpha=0.1, color="#e63946")
+
+    plt.xlabel("Episode", fontsize=11)
+    plt.ylabel("Utility", fontsize=11)
+    plt.title("IQM with IQR: Standard Q-learning vs Total Reward Q-value\n(a=0.4, g=0.4, e=0.3)", fontsize=12, fontweight="bold")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    filename = "comparison_totalQ_a0.4_g0.4_e0.3.png"
+    plt.savefig(filename, dpi=300, bbox_inches="tight")
+    print(f"Saved: {filename}")
+    plt.close()
 
 
 alpha_files = []
@@ -163,6 +210,8 @@ if gamma_files:
 if epsilon_files:
     epsilon_values = [parse_params(f)["epsilon"] for f in epsilon_files]
     plot_parameter_comparison(epsilon_files, "epsilon", epsilon_values, {"alpha": 0.8, "gamma": 0.2})
+    
+plot_totalQ_comparison()
 
 # Generate summary table
 print("\nGenerating summary statistics...")
