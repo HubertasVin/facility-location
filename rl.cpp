@@ -262,12 +262,6 @@ void saveQTable(const unordered_map<string, double> &Q, const string &filename)
     }
 }
 
-// Pridėkite prie globals.cpp:
-// bool useFinalRewardQ = getEnvBool("RL_FINAL_REWARD_Q", false);
-
-// Pridėkite prie rl.cpp viršaus:
-extern bool useFinalRewardQ;
-
 void trainQAgent(int episodes, int maxFacilities, int run_id, unordered_map<string, double> &Q_local)
 {
     double utility_sum = 0.0;
