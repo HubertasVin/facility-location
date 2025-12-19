@@ -1,8 +1,8 @@
 #!/bin/bash
 
-alphas=(0.1 0.2 0.4) # 0.8 removed because value already tested in variable epsilon
+alphas=(0.1 0.2 0.4 0.8)
 gammas=(0 0.4 0.5)
-epsilons=(0.05 0.1 0.2 0.3)
+epsilons=(0.05 0.1 0.2 0.3) # 0.2 removed because value already tested in variable alpha
 
 export RL_QTABLE_FILE="../qtables/qtable.dat"
 export RL_DEMANDS_FILE="../demands_1000LT.dat"
@@ -21,24 +21,26 @@ run_with_parmeters() {
     alpha=$1
     gamma=$2
     epsilon=$3
-
+    tag=$4
+    
     echo ""
     echo "=========================================="
-    echo "Alpha: $alpha, Gamma: $gamma, Epsilon: $epsilon"
+    echo "[$tag] Alpha: $alpha, Gamma: $gamma, Epsilon: $epsilon, Episodes: $RL_EPISODES"
     echo "=========================================="
-
+    
     # Set environment variables
     export RL_ALPHA=$alpha
     export RL_GAMMA=$gamma
     export RL_EPSILON=$epsilon
     export RL_NUM_RUNS=40
     export RL_WINDOW_SIZE=5
-
+    
     ../rl
-
+    
     if [ -f "training_curves.csv" ]; then
-        mv training_curves.csv "data/training_a${alpha}_g${gamma}_e${epsilon}.csv"
-        mv final_scores.csv "data/final_a${alpha}_g${gamma}_e${epsilon}.csv"
+        mkdir -p data
+        mv training_curves.csv "data/${tag}_training_a${alpha}_g${gamma}_e${epsilon}_ep${RL_EPISODES}.csv"
+        mv final_scores.csv   "data/${tag}_final_a${alpha}_g${gamma}_e${epsilon}_ep${RL_EPISODES}.csv"
     else
         echo "ERROR: training_curves.csv not found!"
     fi
@@ -47,14 +49,14 @@ run_with_parmeters() {
 export RL_EPISODES=40000
 export RL_FIXED_EPSILON=true
 for alpha in "${alphas[@]}"; do
-	run_with_parmeters $alpha 0.2 0.2
+    run_with_parameters "$alpha" 0.2 0.2 "sweep_alpha"
 done
 export RL_EPISODES=20000
 for gamma in "${gammas[@]}"; do
-	run_with_parmeters 0.8 $gamma 0.2
+    run_with_parameters 0.8 "$gamma" 0.2 "sweep_gamma"
 done
 for epsilon in "${epsilons[@]}"; do
-	run_with_parmeters 0.8 0.2 $epsilon
+    run_with_parameters 0.8 0.2 "$epsilon" "sweep_epsilon"
 done
 export RL_FIXED_EPSILON=false
 run_with_parmeters 0.8 0.2 0

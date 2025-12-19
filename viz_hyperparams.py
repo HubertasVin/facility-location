@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import argparse
 import glob
 import os
@@ -12,8 +11,14 @@ import matplotlib.pyplot as plt
 
 
 FILENAME_RE = re.compile(
-    r"^training_a(?P<a>[-+]?\d*\.?\d+)_g(?P<g>[-+]?\d*\.?\d+)_e(?P<e>[-+]?\d*\.?\d+)"
-    r"(?P<suffix>_finalRewardON|_finalRewardOFF)?\.csv$"
+    r"^training_"
+    r"(?:(?P<tag>.+?)_)?"
+    r"a(?P<a>[-+]?\d*\.?\d+)_"
+    r"g(?P<g>[-+]?\d*\.?\d+)_"
+    r"e(?P<e>[-+]?\d*\.?\d+)"
+    r"(?:_ep(?P<ep>\d+))?"
+    r"(?P<suffix>_finalRewardON|_finalRewardOFF)?"
+    r"\.csv$"
 )
 
 
@@ -26,7 +31,18 @@ class RunMeta:
     alpha: float
     gamma: float
     epsilon: float
+    episodes: Optional[int]
+    tag: Optional[str]
     suffix: Optional[str]
+
+
+def norm_tag(tag: Optional[str]) -> str:
+    return tag if tag not in (None, "") else "notag"
+
+
+def safe_tag_for_path(tag: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", tag)
+    return cleaned if cleaned else "notag"
 
 
 def parse_training_filename(path: str) -> RunMeta:
@@ -38,7 +54,7 @@ def parse_training_filename(path: str) -> RunMeta:
     a_str = m.group("a")
     g_str = m.group("g")
     e_str = m.group("e")
-    suffix = m.group("suffix")
+    ep_str = m.group("ep")
 
     return RunMeta(
         path=path,
@@ -48,15 +64,13 @@ def parse_training_filename(path: str) -> RunMeta:
         alpha=float(a_str),
         gamma=float(g_str),
         epsilon=float(e_str),
-        suffix=suffix,
+        episodes=int(ep_str) if ep_str is not None else None,
+        tag=m.group("tag"),
+        suffix=m.group("suffix"),
     )
 
 
 def iqm_iqr_stats(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Expects columns: episode, utility
-    Returns index=episode with columns: mean, std, q25, q75, iqm
-    """
     def _iqm(s: pd.Series) -> float:
         q25 = s.quantile(0.25)
         q75 = s.quantile(0.75)
@@ -78,14 +92,12 @@ def ensure_outdir(outdir: str) -> None:
 
 
 def pretty_fixed_params(fixed: Dict[str, float]) -> str:
-    # stable ordering for titles/filenames
     keys = ["alpha", "gamma", "epsilon"]
     parts = [f"{k}={fixed[k]:g}" for k in keys if k in fixed]
     return ", ".join(parts)
 
 
 def fixed_suffix_for_filename(fixed: Dict[str, float]) -> str:
-    # Used to avoid overwriting when you have multiple sweeps
     keys = ["alpha", "gamma", "epsilon"]
     parts = [f"{k[0]}{fixed[k]:g}" for k in keys if k in fixed]
     return "_".join(parts) if parts else "all"
@@ -98,10 +110,10 @@ def plot_parameter_comparison(
     outdir: str,
     target_utility: Optional[float],
     treat_e0_as_variable: bool,
+    tag_label: str,
 ) -> None:
     colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#e63946", "#9467bd", "#8c564b"]
 
-    # Load & compute stats first (also allows dynamic threshold if no target_utility)
     stats_by_meta: List[Tuple[RunMeta, pd.DataFrame]] = []
     max_iqm_seen = -np.inf
 
@@ -117,19 +129,20 @@ def plot_parameter_comparison(
         max_value = float(target_utility)
     else:
         if not np.isfinite(max_iqm_seen):
-            print(f"[WARN] No finite IQM values found for varying {vary_param}, skipping plots.")
+            print(f"[WARN] No finite IQM values found for tag={tag_label}, varying {vary_param}, skipping plots.")
             return
         max_value = float(max_iqm_seen)
 
     convergence_threshold = 0.9 * max_value
 
-    # --- create three figures
     fig1, ax1 = plt.subplots(figsize=(10, 6))
     fig2, ax2 = plt.subplots(figsize=(10, 6))
     fig3, ax3 = plt.subplots(figsize=(10, 6))
 
-    # Sort by varied parameter value
-    metas_sorted = sorted(metas, key=lambda m: getattr(m, vary_param))
+    metas_sorted = sorted(
+        metas,
+        key=lambda m: (getattr(m, vary_param), m.episodes if m.episodes is not None else -1, os.path.basename(m.path)),
+    )
 
     for idx, meta in enumerate(metas_sorted):
         st = next(s for (m, s) in stats_by_meta if m == meta)
@@ -138,13 +151,17 @@ def plot_parameter_comparison(
         value_str = getattr(meta, f"{vary_param}_str")
 
         if vary_param == "epsilon" and treat_e0_as_variable and abs(value) < 1e-12:
-            label = "epsilon=variable"
+            base_label = "epsilon=variable"
         else:
-            label = f"{vary_param}={value_str}"
+            base_label = f"{vary_param}={value_str}"
+
+        extra = []
+        if meta.episodes is not None:
+            extra.append(f"ep={meta.episodes}")
+        label = f"{base_label} ({', '.join(extra)})" if extra else base_label
 
         color = colors[idx % len(colors)]
 
-        # 1) IQM with IQR
         ax1.plot(st.index, st["iqm"], label=label, linewidth=2.5, color=color)
         ax1.fill_between(st.index, st["q25"], st["q75"], alpha=0.12, color=color)
 
@@ -152,35 +169,46 @@ def plot_parameter_comparison(
         if len(convergence_eps) > 0:
             ep0 = int(convergence_eps[0])
             y0 = float(st.loc[ep0, "iqm"])
+            print(
+                f"{vary_param} sweep (tag={tag_label}, {pretty_fixed_params(fixed_params)}): "
+                f"{label} converged at ep {ep0} (IQM={y0:.4f})"
+            )
 
-            print(f"{vary_param} sweep ({pretty_fixed_params(fixed_params)}): {label} converged at ep {ep0} (IQM={y0:.4f})")
-
-        # 2) Standard deviation
         ax2.plot(st.index, st["std"], label=label, linewidth=2.0, color=color)
 
-        # 3) Coefficient of variation (%)
         cv = (st["std"] / st["mean"]) * 100.0
         ax3.plot(st.index, cv, label=label, linewidth=2.0, color=color)
 
-    # Titles / labels
     fixed_txt = pretty_fixed_params(fixed_params)
     fixed_file = fixed_suffix_for_filename(fixed_params)
 
     ax1.set_xlabel("Episode", fontsize=11)
     ax1.set_ylabel("Utility", fontsize=11)
-    ax1.set_title(f"IQM with IQR — varying {vary_param.upper()}\nFixed: {fixed_txt}", fontsize=12, fontweight="bold")
+    ax1.set_title(
+        f"IQM with IQR — varying {vary_param.upper()}\nTag: {tag_label} | Fixed: {fixed_txt}",
+        fontsize=12,
+        fontweight="bold",
+    )
     ax1.grid(True, alpha=0.3)
     ax1.legend()
 
     ax2.set_xlabel("Episode", fontsize=11)
     ax2.set_ylabel("Standard Deviation", fontsize=11)
-    ax2.set_title(f"STD over time — varying {vary_param.upper()}\nFixed: {fixed_txt}", fontsize=12, fontweight="bold")
+    ax2.set_title(
+        f"STD over time — varying {vary_param.upper()}\nTag: {tag_label} | Fixed: {fixed_txt}",
+        fontsize=12,
+        fontweight="bold",
+    )
     ax2.grid(True, alpha=0.3)
     ax2.legend()
 
     ax3.set_xlabel("Episode", fontsize=11)
     ax3.set_ylabel("CV (%)", fontsize=11)
-    ax3.set_title(f"Coefficient of Variation — varying {vary_param.upper()}\nFixed: {fixed_txt}", fontsize=12, fontweight="bold")
+    ax3.set_title(
+        f"Coefficient of Variation — varying {vary_param.upper()}\nTag: {tag_label} | Fixed: {fixed_txt}",
+        fontsize=12,
+        fontweight="bold",
+    )
     ax3.grid(True, alpha=0.3)
     ax3.legend()
 
@@ -207,10 +235,6 @@ def plot_parameter_comparison(
 
 
 def build_groups_for_param(metas: List[RunMeta], vary_param: str) -> Dict[Tuple[float, float], List[RunMeta]]:
-    """
-    For a chosen vary_param, group runs by the other two params.
-    Example: vary_param='alpha' => group key=(gamma, epsilon) -> list of metas.
-    """
     if vary_param == "alpha":
         key_fn = lambda m: (m.gamma, m.epsilon)
     elif vary_param == "gamma":
@@ -239,7 +263,7 @@ def fixed_params_from_key(vary_param: str, key: Tuple[float, float]) -> Dict[str
     raise ValueError(vary_param)
 
 
-def generate_summary(metas: List[RunMeta], outdir: str) -> None:
+def generate_summary(metas: List[RunMeta], outdir: str, filename: str = "summary_rankings.csv") -> None:
     rows = []
     for meta in metas:
         df = pd.read_csv(meta.path)
@@ -253,6 +277,8 @@ def generate_summary(metas: List[RunMeta], outdir: str) -> None:
         rows.append(
             {
                 "file": os.path.basename(meta.path),
+                "Tag": norm_tag(meta.tag),
+                "Episodes": meta.episodes if meta.episodes is not None else "",
                 "Alpha": meta.alpha,
                 "Gamma": meta.gamma,
                 "Epsilon": meta.epsilon,
@@ -263,7 +289,7 @@ def generate_summary(metas: List[RunMeta], outdir: str) -> None:
 
     summary_df = pd.DataFrame(rows).sort_values("Final_IQM", ascending=False)
     ensure_outdir(outdir)
-    outpath = os.path.join(outdir, "summary_rankings.csv")
+    outpath = os.path.join(outdir, filename)
     summary_df.to_csv(outpath, index=False)
 
     print(f"Saved: {outpath}")
@@ -271,8 +297,8 @@ def generate_summary(metas: List[RunMeta], outdir: str) -> None:
     print(summary_df.head(10).to_string(index=False))
 
 
-def main():
-    ap = argparse.ArgumentParser(description="Hyperparameter sweep visualisations (auto-grouped by filename).")
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Hyperparameter sweep visualisations (auto-grouped by filename + tag).")
     ap.add_argument("--dir", default=".", help="Directory containing training_*.csv files (default: .)")
     ap.add_argument("--outdir", default=".", help="Where to write plots/csv (default: .)")
     ap.add_argument(
@@ -293,7 +319,7 @@ def main():
     )
     args = ap.parse_args()
 
-    pattern = os.path.join(args.dir, "training_a*_g*_e*.csv")
+    pattern = os.path.join(args.dir, "training_*.csv")
     paths = sorted(glob.glob(pattern))
     if not paths:
         print(f"No training files found in: {args.dir}")
@@ -316,28 +342,43 @@ def main():
         print("No usable training files after filtering.")
         return 1
 
-    # 1) Make plots for each parameter, automatically grouped by the other two.
-    for vary in ["alpha", "gamma", "epsilon"]:
-        groups = build_groups_for_param(metas_all, vary)
-        for key, group_metas in groups.items():
-            distinct_vals = sorted({getattr(m, vary) for m in group_metas})
-            if len(distinct_vals) < 2:
-                continue  # not actually a sweep
+    tags = sorted({norm_tag(m.tag) for m in metas_all})
+    print(f"Discovered tag groups: {', '.join(tags)}")
 
-            fixed = fixed_params_from_key(vary, key)
-            print(f"\nPlotting sweep: vary={vary}, fixed={pretty_fixed_params(fixed)} (n={len(group_metas)})")
-            plot_parameter_comparison(
-                metas=group_metas,
-                vary_param=vary,
-                fixed_params=fixed,
-                outdir=args.outdir,
-                target_utility=args.target_utility,
-                treat_e0_as_variable=args.treat_e0_as_variable,
-            )
+    for tag in tags:
+        metas_tag = [m for m in metas_all if norm_tag(m.tag) == tag]
+        tag_dir = os.path.join(args.outdir, f"tag_{safe_tag_for_path(tag)}")
+        ensure_outdir(tag_dir)
 
-    # 2) Summary table across all included runs
-    print("\nGenerating summary statistics...")
-    generate_summary(metas_all, args.outdir)
+        print(f"\n==============================")
+        print(f"TAG group: {tag} (n={len(metas_tag)})")
+        print(f"Output dir: {tag_dir}")
+        print(f"==============================")
+
+        for vary in ["alpha", "gamma", "epsilon"]:
+            groups = build_groups_for_param(metas_tag, vary)
+            for key, group_metas in groups.items():
+                distinct_vals = sorted({getattr(m, vary) for m in group_metas})
+                if len(distinct_vals) < 2:
+                    continue
+
+                fixed = fixed_params_from_key(vary, key)
+                print(f"\nPlotting sweep: tag={tag}, vary={vary}, fixed={pretty_fixed_params(fixed)} (n={len(group_metas)})")
+                plot_parameter_comparison(
+                    metas=group_metas,
+                    vary_param=vary,
+                    fixed_params=fixed,
+                    outdir=tag_dir,
+                    target_utility=args.target_utility,
+                    treat_e0_as_variable=args.treat_e0_as_variable,
+                    tag_label=tag,
+                )
+
+        print("\nGenerating summary statistics for this tag...")
+        generate_summary(metas_tag, tag_dir, filename="summary_rankings.csv")
+
+    print("\nGenerating summary statistics across ALL tags...")
+    generate_summary(metas_all, args.outdir, filename="summary_rankings_alltags.csv")
     return 0
 
 
