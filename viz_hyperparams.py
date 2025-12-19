@@ -138,7 +138,7 @@ def plot_parameter_comparison(
         value_str = getattr(meta, f"{vary_param}_str")
 
         if vary_param == "epsilon" and treat_e0_as_variable and abs(value) < 1e-12:
-            label = "epsilon=variable (from filename e0)"
+            label = "epsilon=variable"
         else:
             label = f"{vary_param}={value_str}"
 
@@ -153,9 +153,6 @@ def plot_parameter_comparison(
             ep0 = int(convergence_eps[0])
             y0 = float(st.loc[ep0, "iqm"])
 
-            ax1.plot(ep0, y0, "x", markersize=14, markeredgewidth=4, color="black")
-            ax1.plot(ep0, y0, "x", markersize=12, markeredgewidth=2, color=color,
-                     label=f"90% conv ({label}, ep {ep0})")
             print(f"{vary_param} sweep ({pretty_fixed_params(fixed_params)}): {label} converged at ep {ep0} (IQM={y0:.4f})")
 
         # 2) Standard deviation

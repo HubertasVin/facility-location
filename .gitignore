@@ -1,4 +1,5 @@
-results/*.csv
+training_*.csv
+final_*.csv
 final_scores.csv
 training_curves.csv
 rl
