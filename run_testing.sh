@@ -5,8 +5,8 @@ gammas=(0 0.4 0.5)
 epsilons=(0.05 0.1 0.2 0.3) # 0.2 removed because value already tested in variable alpha
 
 export RL_QTABLE_FILE="../qtables/qtable.dat"
-export RL_DEMANDS_FILE="../demands_1000LT.dat"
-export RL_PROBLEM_FILE="../CFLP_J10L100.dat"
+export RL_DEMANDS_FILE="../demands.dat"
+export RL_PROBLEM_FILE="../CFLP.dat"
 export RL_MAX_FACILITIES=5
 
 mkdir -p results
@@ -75,8 +75,8 @@ export RL_FINAL_REWARD_Q=0
 export RL_EPISODES=30000
 export RL_NUM_RUNS=12
 export RL_WINDOW_SIZE=5
-export RL_DEMANDS_FILE="../demands_1000LT.dat"
-export RL_PROBLEM_FILE="../CFLP_J10L100.dat"
+export RL_DEMANDS_FILE="../demands.dat"
+export RL_PROBLEM_FILE="../CFLP.dat"
 ../rl
 if [ -f "training_curves.csv" ]; then
     mv training_curves.csv "data/training_a${RL_ALPHA}_g${RL_GAMMA}_e${RL_EPSILON}_finalRewardOFF.csv"

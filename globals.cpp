@@ -32,8 +32,8 @@ bool getEnvBool(const char *name, bool default_value)
 }
 
 //===== Parameters for Facility location problem ==============================
-string problemFile = getEnvVar("RL_PROBLEM_FILE", "CFLP_J10L100.dat");   // Problem description file
-string demandsFile = getEnvVar("RL_DEMANDS_FILE", "demands_1000LT.dat"); // Demand points file
+string problemFile = getEnvVar("RL_PROBLEM_FILE", "CFLP.dat");   // Problem description file
+string demandsFile = getEnvVar("RL_DEMANDS_FILE", "demands.dat"); // Demand points file
 int maxFacilities = getEnvInt("RL_MAX_FACILITIES", 3);                   // Number of new facilities
 
 //===== Parameters for Q-Learning =============================================
