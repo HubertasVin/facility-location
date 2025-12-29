@@ -48,3 +48,4 @@ int window_size = getEnvInt("RL_WINDOW_SIZE", 1);              // Window size fo
 double epsilon_slope = ((double)trainingEpisodes / 2) /
                        9;                                      // Epsilon decreasing slope steepness value ((num. of episodes to reach 0.1 value) / 9)
 bool useFinalRewardQ = getEnvBool("RL_FINAL_REWARD_Q", false); // Use final reward to update the Q-values if true
+bool performTraining = getEnvBool("RL_TRAINING_MODE", true); // If true, train; else just pick greedily (but your picker still uses epsilon)

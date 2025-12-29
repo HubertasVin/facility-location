@@ -163,7 +163,6 @@ def plot_parameter_comparison(
         color = colors[idx % len(colors)]
 
         ax1.plot(st.index, st["iqm"], label=label, linewidth=2.5, color=color)
-        ax1.fill_between(st.index, st["q25"], st["q75"], alpha=0.12, color=color)
 
         convergence_eps = st.index[st["iqm"] >= convergence_threshold]
         if len(convergence_eps) > 0:
@@ -185,7 +184,7 @@ def plot_parameter_comparison(
     ax1.set_xlabel("Episode", fontsize=11)
     ax1.set_ylabel("Utility", fontsize=11)
     ax1.set_title(
-        f"IQM with IQR — varying {vary_param.upper()}\nTag: {tag_label} | Fixed: {fixed_txt}",
+        f"IQM over time — varying {vary_param.upper()}\nTag: {tag_label} | Fixed: {fixed_txt}",
         fontsize=12,
         fontweight="bold",
     )
@@ -363,7 +362,9 @@ def main() -> int:
                     continue
 
                 fixed = fixed_params_from_key(vary, key)
-                print(f"\nPlotting sweep: tag={tag}, vary={vary}, fixed={pretty_fixed_params(fixed)} (n={len(group_metas)})")
+                print(
+                    f"\nPlotting sweep: tag={tag}, vary={vary}, fixed={pretty_fixed_params(fixed)} (n={len(group_metas)})"
+                )
                 plot_parameter_comparison(
                     metas=group_metas,
                     vary_param=vary,

@@ -1,15 +1,18 @@
-#!/usr/bin/env python3
 import argparse
 import glob
 import os
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 
+# Expected filenames:
+#   training_a0.8_g0.0_e0.2_finalRewardOFF.csv
+#   training_a0.8_g0.0_e0.2_finalRewardON.csv
 FILENAME_RE = re.compile(
     r"^training_a(?P<a>[-+]?\d*\.?\d+)_g(?P<g>[-+]?\d*\.?\d+)_e(?P<e>[-+]?\d*\.?\d+)"
     r"(?P<suffix>_finalRewardON|_finalRewardOFF)\.csv$"
@@ -28,7 +31,7 @@ class FinalRewardMeta:
     suffix: str  # "_finalRewardON" or "_finalRewardOFF"
 
 
-def parse_totalq_filename(path: str) -> FinalRewardMeta:
+def parse_filename(path: str) -> FinalRewardMeta:
     base = os.path.basename(path)
     m = FILENAME_RE.match(base)
     if not m:
@@ -51,29 +54,38 @@ def parse_totalq_filename(path: str) -> FinalRewardMeta:
     )
 
 
-def iqm_iqr_stats(df: pd.DataFrame) -> pd.DataFrame:
-    def _iqm(s: pd.Series) -> float:
-        q25 = s.quantile(0.25)
-        q75 = s.quantile(0.75)
-        mid = s[(s >= q25) & (s <= q75)]
-        return float(mid.mean()) if len(mid) else float("nan")
-
-    grouped = df.groupby("episode")["utility"].agg(
-        mean="mean",
-        std="std",
-        q25=lambda x: x.quantile(0.25),
-        q75=lambda x: x.quantile(0.75),
-        iqm=_iqm,
-    )
-    return grouped
-
-
 def ensure_outdir(outdir: str) -> None:
     os.makedirs(outdir, exist_ok=True)
 
 
-def main():
-    ap = argparse.ArgumentParser(description="FinalReward on/off comparison plots (auto-paired by filename).")
+def iqm_stats(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute per-episode IQM (25% trimmed mean) across runs, plus mean/std.
+    Assumes df has columns: episode, utility.
+    """
+    if "episode" not in df.columns or "utility" not in df.columns:
+        raise ValueError("CSV must contain columns: 'episode' and 'utility'")
+
+    def _iqm_trimmed(s: pd.Series) -> float:
+        x = np.sort(s.to_numpy(dtype=float))
+        n = x.size
+        if n == 0:
+            return float("nan")
+        k = int(np.floor(0.25 * n))
+        mid = x[k : n - k]  # middle 50% (or more if n not divisible)
+        return float(np.mean(mid)) if mid.size else float("nan")
+
+    return df.groupby("episode")["utility"].agg(
+        mean="mean",
+        std="std",
+        iqm=_iqm_trimmed,
+    )
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        description="Compare finalReward OFF vs ON (paired by alpha, gamma, epsilon). Plots IQM only."
+    )
     ap.add_argument("--dir", default=".", help="Directory containing training_*_finalRewardON/off.csv (default: .)")
     ap.add_argument("--outdir", default=".", help="Where to write plots (default: .)")
     args = ap.parse_args()
@@ -87,11 +99,11 @@ def main():
     metas: List[FinalRewardMeta] = []
     for p in paths:
         try:
-            metas.append(parse_totalq_filename(p))
+            metas.append(parse_filename(p))
         except ValueError as e:
             print(f"[WARN] {e}")
 
-    # Pair by (a,g,e)
+    # Pair by (a,g,e) using string keys to preserve filename formatting in output names/titles
     by_key: Dict[Tuple[str, str, str], Dict[str, FinalRewardMeta]] = {}
     for m in metas:
         key = (m.alpha_str, m.gamma_str, m.epsilon_str)
@@ -112,20 +124,33 @@ def main():
         df_off = pd.read_csv(off.path)
         df_on = pd.read_csv(on.path)
 
-        st_off = iqm_iqr_stats(df_off)
-        st_on = iqm_iqr_stats(df_on)
+        st_off = iqm_stats(df_off)
+        st_on = iqm_stats(df_on)
 
         plt.figure(figsize=(10, 6))
 
-        plt.plot(st_off.index, st_off["iqm"], label="Standard Q-learning (finalReward off)", color="#1f77b4", linewidth=2.5)
-        plt.fill_between(st_off.index, st_off["q25"], st_off["q75"], alpha=0.12, color="#1f77b4")
-
-        plt.plot(st_on.index, st_on["iqm"], label="Total Reward Q-value (finalReward on)", color="#e63946", linewidth=2.5)
-        plt.fill_between(st_on.index, st_on["q25"], st_on["q75"], alpha=0.12, color="#e63946")
+        plt.plot(
+            st_off.index,
+            st_off["iqm"],
+            label="Standard Q-learning (finalReward OFF)",
+            color="#1f77b4",
+            linewidth=2.5,
+        )
+        plt.plot(
+            st_on.index,
+            st_on["iqm"],
+            label="Final-reward update (finalReward ON)",
+            color="#e63946",
+            linewidth=2.5,
+        )
 
         plt.xlabel("Episode", fontsize=11)
         plt.ylabel("Utility", fontsize=11)
-        plt.title(f"IQM with IQR: finalReward off vs on\n(a={a_str}, g={g_str}, e={e_str})", fontsize=12, fontweight="bold")
+        plt.title(
+            f"IQM over time: finalReward OFF vs ON\n(a={a_str}, g={g_str}, e={e_str})",
+            fontsize=12,
+            fontweight="bold",
+        )
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
