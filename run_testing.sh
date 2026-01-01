@@ -17,7 +17,7 @@ echo "Starting automated training runs..."
 echo "Total configurations: $((${#alphas[@]} * ${#gammas[@]} * ${#epsilons[@]}))"
 
 
-run_with_parmeters() {
+run_with_parameters() {
     alpha=$1
     gamma=$2
     epsilon=$3
@@ -59,7 +59,7 @@ for epsilon in "${epsilons[@]}"; do
     run_with_parameters 0.8 0.2 "$epsilon" "sweep_epsilon"
 done
 export RL_FIXED_EPSILON=false
-run_with_parmeters 0.8 0.2 0
+run_with_parameters 0.8 0.2 0 "sweep_epsilon"
 
 python3 ../viz_hyperparams.py --treat-e0-as-variable --dir data --outdir .
 
@@ -75,8 +75,6 @@ export RL_FINAL_REWARD_Q=0
 export RL_EPISODES=30000
 export RL_NUM_RUNS=12
 export RL_WINDOW_SIZE=5
-export RL_DEMANDS_FILE="../demands.dat"
-export RL_PROBLEM_FILE="../CFLP.dat"
 ../rl
 if [ -f "training_curves.csv" ]; then
     mv training_curves.csv "data/training_a${RL_ALPHA}_g${RL_GAMMA}_e${RL_EPSILON}_finalRewardOFF.csv"
@@ -95,5 +93,8 @@ else
 fi
 
 python3 ../viz_finalreward.py --dir data --outdir .
+
+rm ../training_curves.csv
+rm ../final_scores.csv
 
 echo "Done! Results saved in ./results/"

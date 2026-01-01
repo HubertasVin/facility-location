@@ -11,8 +11,7 @@ import matplotlib.pyplot as plt
 
 
 FILENAME_RE = re.compile(
-    r"^training_"
-    r"(?:(?P<tag>.+?)_)?"
+    r"^(?:(?P<tag>.+?)_)?training_"
     r"a(?P<a>[-+]?\d*\.?\d+)_"
     r"g(?P<g>[-+]?\d*\.?\d+)_"
     r"e(?P<e>[-+]?\d*\.?\d+)"
@@ -135,9 +134,8 @@ def plot_parameter_comparison(
 
     convergence_threshold = 0.9 * max_value
 
-    fig1, ax1 = plt.subplots(figsize=(10, 6))
-    fig2, ax2 = plt.subplots(figsize=(10, 6))
-    fig3, ax3 = plt.subplots(figsize=(10, 6))
+    # Create a single figure with two subplots side by side (IQM left, STD right)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
 
     metas_sorted = sorted(
         metas,
@@ -155,13 +153,11 @@ def plot_parameter_comparison(
         else:
             base_label = f"{vary_param}={value_str}"
 
-        extra = []
-        if meta.episodes is not None:
-            extra.append(f"ep={meta.episodes}")
-        label = f"{base_label} ({', '.join(extra)})" if extra else base_label
+        label = f"{base_label}"
 
         color = colors[idx % len(colors)]
 
+        # Plot IQM on left subplot
         ax1.plot(st.index, st["iqm"], label=label, linewidth=2.5, color=color)
 
         convergence_eps = st.index[st["iqm"] >= convergence_threshold]
@@ -173,64 +169,43 @@ def plot_parameter_comparison(
                 f"{label} converged at ep {ep0} (IQM={y0:.4f})"
             )
 
+        # Plot STD on right subplot
         ax2.plot(st.index, st["std"], label=label, linewidth=2.0, color=color)
-
-        cv = (st["std"] / st["mean"]) * 100.0
-        ax3.plot(st.index, cv, label=label, linewidth=2.0, color=color)
 
     fixed_txt = pretty_fixed_params(fixed_params)
     fixed_file = fixed_suffix_for_filename(fixed_params)
 
+    # Configure IQM subplot (left)
     ax1.set_xlabel("Episode", fontsize=11)
     ax1.set_ylabel("Utility", fontsize=11)
     ax1.set_title(
-        f"IQM over time — varying {vary_param.upper()}\nTag: {tag_label} | Fixed: {fixed_txt}",
+        f"IQM over time — varying {vary_param.upper()}\nFixed: {fixed_txt}",
         fontsize=12,
         fontweight="bold",
     )
     ax1.grid(True, alpha=0.3)
     ax1.legend()
 
+    # Configure STD subplot (right)
     ax2.set_xlabel("Episode", fontsize=11)
     ax2.set_ylabel("Standard Deviation", fontsize=11)
     ax2.set_title(
-        f"STD over time — varying {vary_param.upper()}\nTag: {tag_label} | Fixed: {fixed_txt}",
+        f"STD over time — varying {vary_param.upper()}\nFixed: {fixed_txt}",
         fontsize=12,
         fontweight="bold",
     )
     ax2.grid(True, alpha=0.3)
     ax2.legend()
 
-    ax3.set_xlabel("Episode", fontsize=11)
-    ax3.set_ylabel("CV (%)", fontsize=11)
-    ax3.set_title(
-        f"Coefficient of Variation — varying {vary_param.upper()}\nTag: {tag_label} | Fixed: {fixed_txt}",
-        fontsize=12,
-        fontweight="bold",
-    )
-    ax3.grid(True, alpha=0.3)
-    ax3.legend()
-
+    # Save single combined figure
     ensure_outdir(outdir)
-    fn1 = os.path.join(outdir, f"comparison_{vary_param}_{fixed_file}_iqm.png")
-    fn2 = os.path.join(outdir, f"comparison_{vary_param}_{fixed_file}_std.png")
-    fn3 = os.path.join(outdir, f"comparison_{vary_param}_{fixed_file}_cv.png")
+    fn = os.path.join(outdir, f"comparison_{vary_param}_{fixed_file}_iqm_std.png")
 
-    fig1.tight_layout()
-    fig1.savefig(fn1, dpi=300, bbox_inches="tight")
-    plt.close(fig1)
+    fig.tight_layout()
+    fig.savefig(fn, dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
-    fig2.tight_layout()
-    fig2.savefig(fn2, dpi=300, bbox_inches="tight")
-    plt.close(fig2)
-
-    fig3.tight_layout()
-    fig3.savefig(fn3, dpi=300, bbox_inches="tight")
-    plt.close(fig3)
-
-    print(f"Saved: {fn1}")
-    print(f"Saved: {fn2}")
-    print(f"Saved: {fn3}")
+    print(f"Saved: {fn}")
 
 
 def build_groups_for_param(metas: List[RunMeta], vary_param: str) -> Dict[Tuple[float, float], List[RunMeta]]:
@@ -318,7 +293,7 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    pattern = os.path.join(args.dir, "training_*.csv")
+    pattern = os.path.join(args.dir, "*training_*.csv")
     paths = sorted(glob.glob(pattern))
     if not paths:
         print(f"No training files found in: {args.dir}")

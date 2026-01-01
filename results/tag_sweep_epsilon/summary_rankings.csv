@@ -1,0 +1,6 @@
+file,Tag,Episodes,Alpha,Gamma,Epsilon,Final_IQM,Final_CV
+sweep_epsilon_training_a0.8_g0.2_e0.2_ep20000.csv,sweep_epsilon,20000,0.8,0.2,0.2,39.38111200000001,0.023858238087164724
+sweep_epsilon_training_a0.8_g0.2_e0.3_ep20000.csv,sweep_epsilon,20000,0.8,0.2,0.3,39.38111200000001,0.06314011842525176
+sweep_epsilon_training_a0.8_g0.2_e0.1_ep20000.csv,sweep_epsilon,20000,0.8,0.2,0.1,39.381112,0.5280335788202547
+sweep_epsilon_training_a0.8_g0.2_e0_ep20000.csv,sweep_epsilon,20000,0.8,0.2,0.0,39.381112,0.05372910234630343
+sweep_epsilon_training_a0.8_g0.2_e0.05_ep20000.csv,sweep_epsilon,20000,0.8,0.2,0.05,39.35436316666667,1.1574993049077253
