@@ -47,14 +47,16 @@ vector<int> getOptimalSolutionLocal(int maxFacilities, unordered_map<string, dou
 //===== NEW: diagnostics grounded in utilityBinary ============================
 
 // Thin wrapper: call utilityBinary with a **mutable** copy (DCFLP expects non-const ref).
-static double U(const vector<int> &s_const) {
+static double U(const vector<int> &s_const)
+{
 	vector<int> s = s_const;
 	sort(s.begin(), s.end()); // be safe: many utilities assume sorted
 	return utilityBinary(s);  // DCFLP.cpp: double utilityBinary(vector<int>&)
 }
 
 // Build list of available actions (not already in state)
-static vector<int> availableActions(const vector<int> &state) {
+static vector<int> availableActions(const vector<int> &state)
+{
 	vector<int> avail;
 	avail.reserve(L.size());
 	for (int loc : L)
@@ -64,29 +66,35 @@ static vector<int> availableActions(const vector<int> &state) {
 }
 
 // For a state, compute true marginal gain r(a) = U(s∪{a}) - U(s)
-static vector<pair<int, double>> marginalGains(const vector<int> &state) {
+static vector<pair<int, double>> marginalGains(const vector<int> &state)
+{
 	double u_before = U(state);
 	vector<pair<int, double>> gains;
-	for (int a : availableActions(state)) {
+	for (int a : availableActions(state))
+	{
 		vector<int> next = state;
 		next.push_back(a);
 		sort(next.begin(), next.end());
 		double u_after = U(next);
 		gains.emplace_back(a, u_after - u_before);
 	}
-	sort(gains.begin(), gains.end(), [](auto &x, auto &y) { return x.second > y.second; });
+	sort(gains.begin(), gains.end(), [](auto &x, auto &y)
+		 { return x.second > y.second; });
 	return gains;
 }
 
 // Q-table access for explanations
-static double getQ(const vector<int> &s, int a) {
+static double getQ(const vector<int> &s, int a)
+{
 	string k = stateActionToString(s, a);
 	auto it = Q_global.find(k);
 	return (it == Q_global.end()) ? 0.0 : it->second;
 }
-static double maxFutureQ_existingKeys(const vector<int> &sNext) {
+static double maxFutureQ_existingKeys(const vector<int> &sNext)
+{
 	double best = -1e300;
-	for (int a : availableActions(sNext)) {
+	for (int a : availableActions(sNext))
+	{
 		double q = getQ(sNext, a);
 		if (q > best)
 			best = q;
@@ -97,16 +105,20 @@ static double maxFutureQ_existingKeys(const vector<int> &sNext) {
 }
 
 //===== Main ==================================================================
-int main() {
+int main()
+{
 	srand(static_cast<unsigned int>(time(0))); // Seed for random numbers
 
 	loadData(problemFile, demandsFile); // Load problem data
 	makeDistanceMatrix();				// Make distance matrix
 
-	if (performTraining) {
+	if (performTraining)
+	{
 		runMultipleTrainingRuns(num_training_runs, trainingEpisodes, maxFacilities, qTableFile);
 		saveQTable(Q_global, qTableFile);
-	} else {
+	}
+	else
+	{
 		loadQTable(Q_global, qTableFile);
 	}
 
@@ -121,12 +133,13 @@ int main() {
 }
 
 //=============================================================================
-//===== Q-learning and helpers =================================================
+//===== Q-learning and helpers ================================================
 //=============================================================================
 
 double epsilonValue(int episode) { return 1 / (1 + episode / epsilon_slope); }
 
-string stateActionToString(const vector<int> &state, int action) {
+string stateActionToString(const vector<int> &state, int action)
+{
 	string str;
 	for (int loc : state)
 		str += to_string(loc) + "-";
@@ -134,14 +147,16 @@ string stateActionToString(const vector<int> &state, int action) {
 	return str;
 }
 
-string stateToString(const vector<int> &state) {
+string stateToString(const vector<int> &state)
+{
 	string str;
 	for (int loc : state)
 		str += to_string(loc) + "-";
 	return str;
 }
 
-string stateToStringCanonical(vector<int> state) {
+string stateToStringCanonical(vector<int> state)
+{
 	sort(state.begin(), state.end());
 	string str;
 	for (int loc : state)
@@ -150,11 +165,14 @@ string stateToStringCanonical(vector<int> state) {
 }
 
 int getActionEpsilonGreedyLocal(const vector<int> &state, double epsilon1,
-								const unordered_map<string, double> &Q_local) {
+								const unordered_map<string, double> &Q_local)
+{
 	double randomValue = static_cast<double>(rand()) / RAND_MAX;
-	if (randomValue < epsilon1) {
+	if (randomValue < epsilon1)
+	{
 		int randomFacility;
-		do {
+		do
+		{
 			randomFacility = L[rand() % L.size()];
 		} while (find(state.begin(), state.end(), randomFacility) != state.end());
 		g_last_pick_was_random = true;
@@ -165,14 +183,18 @@ int getActionEpsilonGreedyLocal(const vector<int> &state, double epsilon1,
 	return bestFacility;
 }
 
-int getActionGreedyLocal(const vector<int> &state, const unordered_map<string, double> &Q_local) {
+int getActionGreedyLocal(const vector<int> &state, const unordered_map<string, double> &Q_local)
+{
 	double maxQValue = -1e9;
 	int bestFacility = -1;
-	for (int loc : L) {
-		if (find(state.begin(), state.end(), loc) == state.end()) {
+	for (int loc : L)
+	{
+		if (find(state.begin(), state.end(), loc) == state.end())
+		{
 			string stateActionStr = stateActionToString(state, loc);
 			auto it = Q_local.find(stateActionStr);
-			if (it != Q_local.end() && it->second > maxQValue) {
+			if (it != Q_local.end() && it->second > maxQValue)
+			{
 				maxQValue = it->second;
 				bestFacility = loc;
 			}
@@ -182,11 +204,14 @@ int getActionGreedyLocal(const vector<int> &state, const unordered_map<string, d
 }
 
 void updateQTable(const string &stateActionStr, const string &nextStateStr, const vector<int> &nextState, double reward,
-				  unordered_map<string, double> &Q_local) {
+				  unordered_map<string, double> &Q_local)
+{
 	double qPredict = Q_local[stateActionStr];
 	double maxFutureReward = -1e9;
-	for (int loc : L) {
-		if (find(nextState.begin(), nextState.end(), loc) == nextState.end()) {
+	for (int loc : L)
+	{
+		if (find(nextState.begin(), nextState.end(), loc) == nextState.end())
+		{
 			string nextStateActionStr = stateActionToString(nextState, loc);
 			auto it = Q_local.find(nextStateActionStr);
 			if (it != Q_local.end())
@@ -199,11 +224,14 @@ void updateQTable(const string &stateActionStr, const string &nextStateStr, cons
 	Q_local[stateActionStr] += alpha * (qTarget - qPredict);
 }
 
-void loadQTable(unordered_map<string, double> &Q, const string &filename) {
+void loadQTable(unordered_map<string, double> &Q, const string &filename)
+{
 	ifstream inFile(filename);
-	if (inFile.is_open()) {
+	if (inFile.is_open())
+	{
 		string line;
-		while (getline(inFile, line)) {
+		while (getline(inFile, line))
+		{
 			stringstream ss(line);
 			string key;
 			double value;
@@ -212,40 +240,50 @@ void loadQTable(unordered_map<string, double> &Q, const string &filename) {
 		}
 		inFile.close();
 		cout << "Q-Table loaded from " << filename << endl;
-	} else {
+	}
+	else
+	{
 		cerr << "Unable to open file for loading Q-Table." << endl;
 	}
 }
 
-void saveQTable(const unordered_map<string, double> &Q, const string &filename) {
+void saveQTable(const unordered_map<string, double> &Q, const string &filename)
+{
 	ofstream outFile(filename);
-	if (outFile.is_open()) {
+	if (outFile.is_open())
+	{
 		for (const auto &entry : Q)
 			outFile << entry.first << " " << entry.second << "\n";
 		outFile.close();
 		cout << "Q-Table saved to " << filename << endl;
-	} else {
+	}
+	else
+	{
 		cerr << "Unable to open file for saving Q-Table." << endl;
 	}
 }
 
-void trainQAgent(int episodes, int maxFacilities, int run_id, unordered_map<string, double> &Q_local) {
+void trainQAgent(int episodes, int maxFacilities, int run_id, unordered_map<string, double> &Q_local)
+{
 	double utility_sum = 0.0;
 	int window_count = 0;
 
-	for (int episode = 0; episode < episodes; ++episode) {
+	for (int episode = 0; episode < episodes; ++episode)
+	{
 		auto start_time = chrono::high_resolution_clock::now();
 		vector<int> currentState;
 		double epsilon_current = fixed_epsilon ? epsilon : epsilonValue(episode);
 
-		if (useFinalRewardQ) {
+		if (useFinalRewardQ)
+		{
 			// ============================================================
-			// NEW METHOD: Q-Learning with final reward as the reward
+			// Final reward as the reward
 			// ============================================================
 
 			vector<tuple<string, string, vector<int>>> trajectory;
 
-			for (int step = 0; step < maxFacilities; ++step) {
+			for (int step = 0; step < maxFacilities; ++step)
+			{
 				int newFacility = getActionEpsilonGreedyLocal(currentState, epsilon_current, Q_local);
 
 				vector<int> nextState = currentState;
@@ -262,12 +300,15 @@ void trainQAgent(int episodes, int maxFacilities, int run_id, unordered_map<stri
 
 			double finalUtility = U(currentState);
 
-			for (const auto &[stateActionStr, nextStateStr, nextState] : trajectory) {
+			for (const auto &[stateActionStr, nextStateStr, nextState] : trajectory)
+			{
 				double qPredict = Q_local[stateActionStr];
 
 				double maxFutureReward = -1e9;
-				for (int loc : L) {
-					if (find(nextState.begin(), nextState.end(), loc) == nextState.end()) {
+				for (int loc : L)
+				{
+					if (find(nextState.begin(), nextState.end(), loc) == nextState.end())
+					{
 						string nextStateActionStr = stateActionToString(nextState, loc);
 						auto it = Q_local.find(nextStateActionStr);
 						if (it != Q_local.end())
@@ -279,14 +320,21 @@ void trainQAgent(int episodes, int maxFacilities, int run_id, unordered_map<stri
 
 				// Q-Learning update with final utility as reward
 				double qTarget = finalUtility + gamma_rl * maxFutureReward;
-				Q_local[stateActionStr] += alpha * (qTarget - qPredict);
+
+				if (qTarget > qPredict)
+				{
+					Q_local[stateActionStr] += alpha * (qTarget - qPredict);
+				}
 			}
-		} else {
+		}
+		else
+		{
 			// ============================================================
-			// Q-LEARNING: intermediate reward
+			// Intermediate reward
 			// ============================================================
 
-			for (int step = 0; step < maxFacilities; ++step) {
+			for (int step = 0; step < maxFacilities; ++step)
+			{
 				int newFacility = getActionEpsilonGreedyLocal(currentState, epsilon_current, Q_local);
 
 				vector<int> nextState = currentState;
@@ -313,7 +361,8 @@ void trainQAgent(int episodes, int maxFacilities, int run_id, unordered_map<stri
 		utility_sum += final_utility;
 		window_count++;
 
-		if (window_count == window_size) {
+		if (window_count == window_size)
+		{
 			vector<int> greedy_solution = getOptimalSolutionLocal(maxFacilities, Q_local);
 			double greedy_utility = U(greedy_solution);
 
@@ -329,7 +378,8 @@ void trainQAgent(int episodes, int maxFacilities, int run_id, unordered_map<stri
 	}
 }
 
-void runMultipleTrainingRuns(int numRuns, int episodes, int maxFacilities, const string &qTableFile) {
+void runMultipleTrainingRuns(int numRuns, int episodes, int maxFacilities, const string &qTableFile)
+{
 	trainingCurvesFile.open("training_curves.csv");
 	trainingCurvesFile << "run_id,episode,utility,runtime_seconds,epsilon\n";
 
@@ -338,7 +388,8 @@ void runMultipleTrainingRuns(int numRuns, int episodes, int maxFacilities, const
 
 	cout << "\n=== Training Run: " << endl;
 #pragma omp parallel for schedule(dynamic)
-	for (int run = 0; run < numRuns; ++run) {
+	for (int run = 0; run < numRuns; ++run)
+	{
 		unordered_map<string, double> Q_local;
 
 #pragma omp critical
@@ -359,7 +410,8 @@ void runMultipleTrainingRuns(int numRuns, int episodes, int maxFacilities, const
 							<< "," << solution.size() << "\n";
 		}
 
-		if (run == numRuns - 1) {
+		if (run == numRuns - 1)
+		{
 			Q_global = Q_local;
 		}
 
@@ -372,10 +424,14 @@ void runMultipleTrainingRuns(int numRuns, int episodes, int maxFacilities, const
 	finalScoresFile.close();
 }
 
-vector<int> getOptimalSolutionLocal(int maxfacilities, unordered_map<string, double> Q_local) {
+vector<int> getOptimalSolutionLocal(int maxfacilities, unordered_map<string, double> Q_local)
+{
 	vector<int> currentstate;
-	for (int step = 0; step < maxfacilities; ++step) {
+	for (int step = 0; step < maxfacilities; ++step)
+	{
 		int bestfacility = getActionGreedyLocal(currentstate, Q_local);
+		if (bestfacility == -1)
+			break;
 		currentstate.push_back(bestfacility);
 		sort(currentstate.begin(), currentstate.end());
 	}
